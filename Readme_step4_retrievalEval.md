@@ -24,6 +24,8 @@ This was intentionally done **before generation** so retrieval quality could be 
 
 A later check uses an LLM only as a reader. It asks whether the five retrieved parents state the labeled evidence. That judge is described in section 31. It does not generate answers.
 
+The selected parent-child shortlist is then reordered with Jev Score. That rerank is in section 33.
+
 ---
 
 # 1. Existing Retrieval Setup
@@ -651,7 +653,7 @@ from:
 passage that directly answers why EPR should be expanded
 ```
 
-That reranking pass was later run on the BGE index as experiment E3. The scores are in section 26. It was not repeated on the OpenAI index.
+That reranking pass was later run on the BGE index as experiment E3. The scores are in section 26. The OpenAI parent-child shortlist is reranked separately with Jev Score, in section 33.
 
 ---
 
@@ -950,6 +952,7 @@ data/evaluation/experiment_comparison.json
 | OpenAI sentence-window | 33.33% | 63.33% | 80.00% | 88.89% | 0.5237 |
 | OpenAI semantic | 48.89% | 66.67% | 76.67% | 87.78% | 0.6082 |
 | OpenAI parent-child | 52.22% | 74.44% | 83.33% | 96.67% | 0.6591 |
+| OpenAI parent-child + Jev Score | 75.56% | 85.56% | 91.11% | 96.67% | 0.8237 |
 
 In question counts, out of 90, for the three OpenAI chunking runs:
 
@@ -959,6 +962,7 @@ In question counts, out of 90, for the three OpenAI chunking runs:
 | OpenAI sentence-window | 30 | 57 | 72 | 80 |
 | OpenAI semantic | 44 | 60 | 69 | 79 |
 | OpenAI parent-child | 47 | 67 | 75 | 87 |
+| OpenAI parent-child + Jev Score | 68 | 77 | 82 | 87 |
 
 Parent-child is the strongest row. It is the only method above 50% Hit@1, and it places the labeled page in the top 10 for 87 of 90 questions. The search unit is small enough to find the passage. The returned unit is still the original parent, so the labeled page stays inside the page span.
 
@@ -966,7 +970,7 @@ Semantic chunking raises Hit@1 and MRR above the fixed OpenAI chunks. Hit@3, Hit
 
 Sentence-window is the weakest OpenAI run. Embedding one sentence often matches the right topic and the wrong page. The 500-token window around that sentence does not recover the labeled page often enough to beat the fixed chunk.
 
-The BGE reranker reaches the same MRR as fixed-size OpenAI, 0.5888 against 0.5885, and a higher Hit@3. It does not reach the OpenAI parent-child scores. That reranker has not been applied to the OpenAI parent-child pool.
+The BGE reranker reaches the same MRR as fixed-size OpenAI, 0.5888 against 0.5885, and a higher Hit@3. It does not reach the OpenAI parent-child scores. The parent-child shortlist is reordered with Jev Score instead. On that same shortlist, Hit@1 rises from 47 to 68 questions and MRR rises from 0.6591 to 0.8237. Hit@10 stays at 87 questions. The details are in section 33.
 
 ---
 
@@ -996,6 +1000,7 @@ Precision@1 is the same number as Hit@1.
 | OpenAI sentence-window | 33.33% | 0.83% | 1.61% |
 | OpenAI semantic | 48.89% | 23.52% | 31.11% |
 | OpenAI parent-child | 52.22% | 24.35% | 32.67% |
+| OpenAI parent-child + Jev Score | 75.56% | 34.81% | 46.81% |
 
 ### @3
 
@@ -1011,6 +1016,7 @@ Precision@1 is the same number as Hit@1.
 | OpenAI sentence-window | 26.30% | 1.95% | 3.62% |
 | OpenAI semantic | 30.00% | 41.39% | 34.06% |
 | OpenAI parent-child | 31.11% | 42.50% | 35.32% |
+| OpenAI parent-child + Jev Score | 35.93% | 49.26% | 40.78% |
 
 ### @5
 
@@ -1026,6 +1032,7 @@ Precision@1 is the same number as Hit@1.
 | OpenAI sentence-window | 21.11% | 2.55% | 4.53% |
 | OpenAI semantic | 22.44% | 52.13% | 30.85% |
 | OpenAI parent-child | 23.33% | 51.94% | 31.69% |
+| OpenAI parent-child + Jev Score | 24.67% | 55.37% | 33.60% |
 
 ### @10
 
@@ -1041,10 +1048,13 @@ Precision@1 is the same number as Hit@1.
 | OpenAI sentence-window | 13.33% | 3.19% | 5.11% |
 | OpenAI semantic | 15.22% | 69.07% | 24.65% |
 | OpenAI parent-child | 15.67% | 68.15% | 25.21% |
+| OpenAI parent-child + Jev Score | 15.44% | 67.41% | 24.87% |
 
 Precision falls as the list gets longer. A question has only one to four chunks that contain the labeled page, so most of a ten-slot list is irrelevant even when the page is found.
 
-Parent-child has the highest F1@1, 32.67%. Gemini has the highest F1@3, 39.71%, and the highest F1@5, 37.69%. Fixed-size OpenAI has the highest F1@10, 28.33%, and the highest recall@10, 75.09%. Parent-child still leads Hit@k and MRR. On recall and F1 past the first rank it is behind Gemini and fixed-size OpenAI, because it more often places one covering parent in the list and less often places every covering chunk there.
+Before the Jev reorder, parent-child has the highest F1@1 of the dense runs, 32.67%. Gemini has the highest F1@3, 39.71%, and the highest F1@5, 37.69%. Fixed-size OpenAI has the highest F1@10, 28.33%, and the highest recall@10, 75.09%. Parent-child still leads those dense runs on Hit@k and MRR. On recall and F1 past the first rank it is behind Gemini and fixed-size OpenAI, because it more often places one covering parent in the list and less often places every covering chunk there.
+
+Jev Score on the parent-child shortlist raises F1@1 to 46.81% and F1@3 to 40.78%. F1@5 becomes 33.60%, still below Gemini's 37.69%, because the rerank moves the covering parent up and does not add more covering parents. F1@10 stays near 24.87%.
 
 Sentence-window precision stays near the other methods: 33.33% at 1 and 13.33% at 10. Its recall stays near 1–3% because the denominator is every overlapping window that contains the page, a median of 42 windows, while the run returns at most 10. That F1 is not on the same scale as the fixed-chunk F1.
 
@@ -1086,7 +1096,9 @@ For OpenAI parent-child:
 
 Within this setup, k=3 has the best F1 and already finds the labeled page for about three questions in four. k=5 gives up some F1 and raises Hit from 74.44% to 83.33%. k=10 reaches 96.67% Hit and drops F1 to 25.21%, so most of the ten passages do not cover the labeled page.
 
-The selected operating point is OpenAI parent-child with k=5. Hit@5 is 83.33%, F1 remains in the same range as k=3, and the list is half as long as k=10. k=3 is the cleaner list. k=5 is the one carried forward so the generator is more likely to receive the labeled page.
+The selected dense operating point is OpenAI parent-child with k=5. Hit@5 is 83.33%, F1 remains in the same range as k=3, and the list is half as long as k=10. k=3 is the cleaner list. k=5 is the one carried forward so the generator is more likely to receive the labeled page.
+
+That list is no longer taken straight from the dense order. Section 33 reranks a shortlist of 20 parents with Jev Score and keeps the top 5. On the same shortlist, Hit@5 rises from 83.33% to 91.11% and F1@5 from 31.69% to 33.60%.
 
 ---
 
@@ -1107,10 +1119,11 @@ At the end of this step, the project now has:
 - BGE experiments for filtering, a pool of 20, and reranking,
 - sentence-window, semantic, and parent-child retrieval on OpenAI,
 - an evidence judge on the selected OpenAI parent-child top 5,
+- a Jev Score rerank of the parent-child shortlist,
 - saved retrieval reports,
 - failure analysis of the BGE baseline.
 
-The selected retrieval setup is OpenAI `text-embedding-3-large` with parent-child units, returning 5 parents. The 125-token child is what gets embedded. The existing 500-token chunk is what gets returned.
+The selected retrieval setup is OpenAI `text-embedding-3-large` with parent-child units. The 125-token child is what gets embedded. The existing 500-token chunk is what gets returned. Jev Score reorders a shortlist of 20 parents, and the generator will receive the top 5 of that order.
 
 ---
 
@@ -1138,16 +1151,21 @@ The selected retrieval setup is OpenAI `text-embedding-3-large` with parent-chil
    Selected: OpenAI parent-child, k=5
 
 9. Evidence judge                  Done
-   gpt-4.1-mini on the top 5 parents
+   gpt-4.1-mini on the dense top 5
    Evidence Hit@5: 78.89%
    Partial only: 21.11%
 
-10. LLM generation                 Not started
+10. Jev Score rerank                Done
+    20 parents, return top 5
+    Hit@5: 91.11%
+    MRR: 0.8237
 
-11. Final RAG evaluation           Not started
+11. LLM generation                 Not started
+
+12. Final RAG evaluation           Not started
 ```
 
-The setup carried forward is OpenAI embeddings, 125-token children, the existing 500-token parents, and k=5. The evidence judge finds a full statement of the labeled evidence in 71 of 90 questions, and a partial statement in the other 19. Generation has not been started.
+The setup carried forward is OpenAI embeddings, 125-token children, the existing 500-token parents, a Jev Score reorder of 20 parents, and k=5. The evidence judge was run on the dense top 5, before this reorder. It finds a full statement of the labeled evidence in 71 of 90 questions, and a partial statement in the other 19. Generation has not been started.
 
 ---
 
@@ -1189,14 +1207,54 @@ Of the 90 questions:
 
 Every question has at least a partial statement of the evidence in the five parents. The strict metric is slightly higher than full evidence support, because covering the labeled page does not always mean the parent states every claim in `evidence_text`. The 4 strict misses that still `support` the evidence are the cases the page rule treats as failures and the judge treats as usable.
 
+This judge reads the dense top 5, the order before Jev Score. It has not been run again on the reranked top 5.
+
 ---
 
 # 32. Conclusion
 
-This project will use **OpenAI parent-child retrieval with k=5**.
+This project will use **OpenAI parent-child retrieval, reordered with Jev Score, and k=5**.
 
-The embedding model is OpenAI `text-embedding-3-large`. Parent-child is the retrieval setup on top of that model, not a separate embedder. Each existing 500-token chunk is the parent that gets returned. That parent is split into children of about 125 tokens, and those children are what get embedded and searched. At query time the search returns the 5 unique parents of the best children.
+The embedding model is OpenAI `text-embedding-3-large`. Parent-child is the retrieval setup on top of that model, not a separate embedder. Each existing 500-token chunk is the parent that gets returned. That parent is split into children of about 125 tokens, and those children are what get embedded and searched. At query time the search collects 20 unique parents. Jev Score reorders them, and the top 5 are what get returned.
 
-That choice comes from the two comparisons in this step. Among fixed-size chunks, OpenAI was the strongest embedding model, with Gemini close behind. Among retrieval setups on that OpenAI index, parent-child had the best Hit@1 (52.22%), the best Hit@5 (83.33%), the best Hit@10 (96.67%), and the best MRR (0.6591). k=5 is the list length carried forward: Hit@5 is 83.33% and F1@5 is 31.69%. k=3 has a slightly higher F1 and misses the labeled page more often. k=10 finds the page more often and fills the list with passages that do not cover it.
+That choice comes from the two comparisons in this step. Among fixed-size chunks, OpenAI was the strongest embedding model, with Gemini close behind. Among retrieval setups on that OpenAI index, parent-child had the best Hit@1 (52.22%), the best Hit@5 (83.33%), the best Hit@10 (96.67%), and the best MRR (0.6591). k=5 is the list length carried forward: Hit@5 is 83.33% and F1@5 is 31.69% in the dense order. k=3 has a slightly higher F1 and misses the labeled page more often. k=10 finds the page more often and fills the list with passages that do not cover it.
 
-An evidence judge on those five parents, `gpt-4.1-mini-2025-04-14`, finds a full statement of the labeled evidence for 71 of the 90 questions (78.89%). The other 19 have only a partial statement. None of the 90 is empty of the evidence. Generation is the next stage. It will receive those 5 parent passages. The BGE baseline, the other embedding indexes, and the sentence-window and semantic indexes stay in place as comparison results. They are not the setup used from here.
+Jev Score then reorders a shortlist of 20 of those parents. Each parent is scored alone on how well it answers the question. On that same shortlist, Hit@1 rises to 75.56%, Hit@5 to 91.11%, and MRR to 0.8237. Hit@10 stays at 96.67%. Generation will receive the top 5 of this reranked list. The method and the scores are in section 33.
+
+An evidence judge on the dense top 5, `gpt-4.1-mini-2025-04-14`, finds a full statement of the labeled evidence for 71 of the 90 questions (78.89%). The other 19 have only a partial statement. None of the 90 is empty of the evidence. That judge has not been repeated on the Jev order. Generation is the next stage. The BGE baseline, the other embedding indexes, and the sentence-window and semantic indexes stay in place as comparison results. They are not the setup used from here.
+
+---
+
+# 33. Jev Score rerank
+
+Dense parent-child search still builds the shortlist. The search reads 200 child hits and keeps 20 unique parents. Jev Score (`jev-1.13.0`) then scores each parent alone against the question. The four levels, from low to high, are:
+
+- Does not answer the question.
+- Same topic, but does not answer the question.
+- Answers part of the question.
+- Answers the question.
+
+The returned score is the expected level on that scale, from 0 to 3. A higher score is ranked first. Each parent is its own request, so one passage cannot see the others. The client reads `JEV_API_KEY` from `.env`.
+
+```powershell
+uv run python -u -m scripts.rerank_parent_child_jev
+```
+
+The report is `data/evaluation/retrieval_openai_parent_child_jev_rerank.json`. The raw scores are `data/evaluation/jev_parent_child_scores.jsonl`.
+
+The two columns below use the same 20 parents. The first column sorts them by the dense score. The second sorts them by the Jev score. The dense column matches the parent-child row in section 26 at every Hit@k. The published parent-child MRR is 0.6591 because that run scored only the first 10. Two questions have their labeled page at dense ranks 11–20, which is why the shortlist MRR below is 0.6610 and why 89 of 90 questions have the page somewhere in the 20.
+
+| Metric | Dense order of the 20 | Jev Score order |
+|---|---:|---:|
+| Hit@1 | 52.22% (47/90) | 75.56% (68/90) |
+| Hit@3 | 74.44% (67/90) | 85.56% (77/90) |
+| Hit@5 | 83.33% (75/90) | 91.11% (82/90) |
+| Hit@10 | 96.67% (87/90) | 96.67% (87/90) |
+| MRR | 0.6610 | 0.8237 |
+| F1@1 | 32.67% | 46.81% |
+| F1@5 | 31.69% | 33.60% |
+| F1@10 | 25.21% | 24.87% |
+
+Hit@10 does not move. The two questions whose labeled page sits past dense rank 10 stay past rank 10 after the reorder. The gain is the order of parents that were already near the top: rank 1 goes from 47 questions to 68, and the list of 5 that generation will see goes from 75 questions to 82.
+
+F1@5 rises only from 31.69% to 33.60%. Jev moves the covering parent upward. It does not retrieve extra covering parents, so precision at 5 stays near one relevant parent in five slots.

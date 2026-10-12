@@ -43,12 +43,16 @@ class StructuredRetriever:
         query: str,
         top_k: int = 5,
         exclude_noise: bool = False,
+        candidate_pool: int | None = None,
     ) -> list[dict[str, Any]]:
         del exclude_noise
         if query not in self.query_cache:
             self.query_cache[query] = self.embedder.encode_query(query)
 
-        pool = top_k if self.mode == "plain" else max(CANDIDATE_POOL, top_k)
+        pool = top_k if self.mode == "plain" else max(
+            candidate_pool or CANDIDATE_POOL,
+            top_k,
+        )
         points = self.client.query_points(
             collection_name=self.collection_name,
             query=self.query_cache[query],
